@@ -53,18 +53,18 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
 
   ###################
   @classGetter
-    elasticsearchType:  -> @_elasticsearchType  ||= snakeCase @getName()
+    elasticsearchType:  -> @_elasticsearchType  ||= snakeCase @getName().split(/Search$/)[0]
     elasticsearchIndex: -> @_elasticsearchIndex ||= snakeCase config.index
-    indexUrl:     -> "#{config.endpoint}/#{@getElasticsearchIndex()}"
     indexTypeUrl: -> "#{@getIndexUrl()}/#{@getElasticsearchType()}"
     searchUrl:    -> "#{@getIndexTypeUrl()}/_search"
+    indexUrl:     (index) -> "#{config.endpoint}/#{index || @getElasticsearchIndex()}"
 
   @getter
     elasticsearchType:  -> @class.getElasticsearchType()
     elasticsearchIndex: -> @class.getElasticsearchIndex()
-    indexUrl:           -> @class.getIndexUrl()
     indexTypeUrl:       -> @class.getIndexTypeUrl()
     searchUrl:          -> @class.getSearchUrl()
+    indexUrl:           (index) -> @class.getIndexUrl index
 
   getEntryUrl: (id) ->
     "#{@getIndexUrl()}/#{@elasticsearchType}/#{id}"
@@ -78,7 +78,6 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
       request.failure data: error.info?.response?.error
     else
       throw error
-
 
   @handlers
     # using @fields, initialize the Elasticsearch index with proper field-types
@@ -94,9 +93,14 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
       .then (exists) ->
         unless exists
           request.subrequest request.pipeline, "createIndex"
+        else
+          true
 
     createIndex: (request) ->
       normalizeJsonRestClientResponse request, RestClient.putJson @getIndexUrl()
+
+    listIndicies: (request) ->
+      RestClient.restRequest verb: "HEAD", url: @getIndexUrl "*"
 
     indexExists: (request) ->
       RestClient.restRequest verb: "HEAD", url: @getIndexUrl()
@@ -120,6 +124,11 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
       .then =>
         normalizeJsonRestClientResponse request,
           RestClient.putJson @getEntryUrl(key), data
+
+    # index alias
+    update: (request) ->
+      {key, data} = request
+      request.subrequest request.pipeline, "index", {key, data}
 
     ###
     perform a search
