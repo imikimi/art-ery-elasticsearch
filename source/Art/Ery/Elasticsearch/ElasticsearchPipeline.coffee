@@ -66,8 +66,8 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     searchUrl:          -> @class.getSearchUrl()
     indexUrl:           (index) -> @class.getIndexUrl index
 
-  getEntryUrl: (id) ->
-    "#{@getIndexUrl()}/#{@elasticsearchType}/#{id}"
+  getEntryUrl:  (id) -> "#{@getIndexUrl()}/#{@elasticsearchType}/#{id}"
+  getUpdateUrl: (id) -> "#{@getEntryUrl id}/_update"
 
   normalizeJsonRestClientResponse = (request, p) ->
     p.catch (e) ->
@@ -82,6 +82,7 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
   @handlers
     # using @fields, initialize the Elasticsearch index with proper field-types
     # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html
+    # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-types.html
     initialize: (request)->
       request.subrequest request.pipeline, "vivifyIndex"
       .then =>
@@ -125,10 +126,20 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
         normalizeJsonRestClientResponse request,
           RestClient.putJson @getEntryUrl(key), data
 
-    # index alias
+    # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
+    # Actually, this is createOrUpdate
     update: (request) ->
       {key, data} = request
-      request.subrequest request.pipeline, "index", {key, data}
+      request.require present(key) && isPlainObject(data), "key and data required, #{formattedInspect {key, data}}"
+      .then =>
+        normalizeJsonRestClientResponse request,
+          RestClient.postJson @getUpdateUrl(key),
+            doc:            data  # update fields in data
+            doc_as_upsert:  true  # if doesn't exist, create with data
+
+    # delete
+    delete: (request) ->
+      request.require false # TODO!
 
     ###
     perform a search
@@ -137,7 +148,7 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
 
     But, I suspect we'll want some streamlined options.
     ###
-    search: (request) ->
+    elasticsearch: (request) ->
       {data} = request
       normalizeJsonRestClientResponse request,
         RestClient.postJson @getSearchUrl(), data
