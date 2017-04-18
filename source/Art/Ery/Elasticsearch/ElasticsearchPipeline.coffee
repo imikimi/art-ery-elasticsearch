@@ -51,6 +51,18 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
   @extendableProperty mapping: {}
   @mapping: @extendMapping
 
+  @getRoutingField: -> @_routingField
+  getRoutingField: -> @class.getRoutingField()
+  @routingField: (@_routingField) ->
+    if @_parentField
+      throw new Error "set routingField: routingField (#{@getRoutingField()}) not needed when there is a parentField (#{@getParentField()})"
+
+  @getParentField: -> @_parentField
+  getParentField: -> @class.getParentField()
+  @parentField: (@_parentField) ->
+    if @_routingField
+      throw new Error "set parentField: routingField (#{@getRoutingField()}) not needed when there is a parentField (#{@getParentField()})"
+
   ###################
   @classGetter
     elasticsearchType:  -> @_elasticsearchType  ||= snakeCase @getName().split(/Search$/)[0]
@@ -66,8 +78,22 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     searchUrl:          -> @class.getSearchUrl()
     indexUrl:           (index) -> @class.getIndexUrl index
 
-  getEntryUrl:  (id) -> "#{@getIndexUrl()}/#{@elasticsearchType}/#{id}"
-  getUpdateUrl: (id) -> "#{@getEntryUrl id}/_update"
+  getEntryBaseUrl:  (id) -> "#{@getIndexUrl()}/#{@elasticsearchType}/#{id}"
+  getEntryUrl:      (id, data) -> "#{@getEntryBaseUrl id}#{@getEntryUrlParams data}"
+  getUpdateUrl:     (id, data) -> "#{@getEntryBaseUrl id}/_update#{@getEntryUrlParams data}"
+
+  getEntryUrlParams:    (data) ->
+    if routingField = @getRoutingField()
+      unless present routingValue = data[routingField]
+        throw new Error "routing field '#{routingField}' is not present in data: #{formattedInspect data}"
+      "&routing=#{encodeURIComponent routingValue}"
+
+    else if parentField = @getParentField()
+      unless present parentValue = data[parentField]
+        throw new Error "parent field '#{parentField}' is not present in data: #{formattedInspect data}"
+
+      "&parent=#{encodeURIComponent parentValue}"
+    else ""
 
   normalizeJsonRestClientResponse = (request, p) ->
     p.catch (e) ->
@@ -124,7 +150,7 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
       request.require present(key) && isPlainObject(data), "key and data required, #{formattedInspect {key, data}}"
       .then =>
         normalizeJsonRestClientResponse request,
-          RestClient.putJson @getEntryUrl(key), data
+          RestClient.putJson @getEntryUrl(key, data), data
 
     # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
     # Actually, this is createOrUpdate
@@ -133,9 +159,12 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
       request.require present(key) && isPlainObject(data), "key and data required, #{formattedInspect {key, data}}"
       .then =>
         normalizeJsonRestClientResponse request,
-          RestClient.postJson @getUpdateUrl(key),
+          RestClient.postJson @getUpdateUrl(key, data),
             doc:            data  # update fields in data
             doc_as_upsert:  true  # if doesn't exist, create with data
+      .catch (e) ->
+        log e
+        throw e
 
     # delete
     delete: (request) ->

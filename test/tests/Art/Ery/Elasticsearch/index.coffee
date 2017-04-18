@@ -3,4 +3,5 @@
 
 module.exports = require './namespace'
 .addModules
-  IndexEntry: require './IndexEntry'
+  IndexEntry:  require './IndexEntry' 
+  ParentChild: require './ParentChild'
