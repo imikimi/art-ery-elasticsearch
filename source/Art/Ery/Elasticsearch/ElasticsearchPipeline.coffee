@@ -1,6 +1,7 @@
 {
   formattedInspect, log, present, isPlainObject, defineModule, snakeCase
   array, object
+  compactFlatten
 } = require 'art-standard-lib'
 {CommunicationStatus:{missing}} = require 'art-foundation'
 {Pipeline} = require 'art-ery'
@@ -57,14 +58,10 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
   @getRoutingField: -> @_routingField
   getRoutingField: -> @class.getRoutingField()
   @routingField: (@_routingField) ->
-    if @_parentField
-      throw new Error "set routingField: routingField (#{@getRoutingField()}) not needed when there is a parentField (#{@getParentField()})"
 
   @getParentField: -> @_parentField
   getParentField: -> @class.getParentField()
   @parentField: (@_parentField) ->
-    if @_routingField
-      throw new Error "set parentField: routingField (#{@getRoutingField()}) not needed when there is a parentField (#{@getParentField()})"
 
   ###################
   @classGetter
@@ -86,17 +83,21 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
   getUpdateUrl:     (id, data) -> "#{@getEntryBaseUrl id}/_update#{@getEntryUrlParams data}"
 
   getEntryUrlParams:    (data) ->
-    if routingField = @getRoutingField()
-      unless present routingValue = data[routingField]
-        throw new Error "routing field '#{routingField}' is not present in data: #{formattedInspect data}"
-      "?routing=#{encodeURIComponent routingValue}"
+    params = compactFlatten [
+      if routingField = @getRoutingField()
+        unless present routingValue = data[routingField]
+          throw new Error "routing field '#{routingField}' is not present in data: #{formattedInspect data}"
+        "routing=#{encodeURIComponent routingValue}"
 
-    else if parentField = @getParentField()
-      unless present parentValue = data[parentField]
-        throw new Error "parent field '#{parentField}' is not present in data: #{formattedInspect data}"
+      if parentField = @getParentField()
+        unless present parentValue = data[parentField]
+          throw new Error "parent field '#{parentField}' is not present in data: #{formattedInspect data}"
 
-      "?parent=#{encodeURIComponent parentValue}"
-    else ""
+        "parent=#{encodeURIComponent parentValue}"
+    ]
+
+    "?#{params.join "&"}"
+
 
   normalizeJsonRestClientResponse = (request, p) ->
     p.catch (e) ->
@@ -134,17 +135,6 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
             elasticsearchPipelines: elasticsearchPipelines
             exists: exists
           status: "alreadyInitialized"
-
-    # # NOTE - this is not safe to be run simultaneously... and I think it will be
-    # # what to do???
-    # # the problem is indexExists + createIndex is not atomic...
-    # vivifyIndex: (request) ->
-    #   request.subrequest request.pipeline, "indexExists"
-    #   .then (exists) ->
-    #     unless exists
-    #       request.subrequest request.pipeline, "createIndex"
-    #     else
-    #       true
 
     createIndex: (request) ->
       normalizeJsonRestClientResponse request, RestClient.putJson @getIndexUrl()
