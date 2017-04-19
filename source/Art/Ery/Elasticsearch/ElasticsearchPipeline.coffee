@@ -1,4 +1,7 @@
-{formattedInspect, log, present, isPlainObject, defineModule, snakeCase} = require 'art-standard-lib'
+{
+  formattedInspect, log, present, isPlainObject, defineModule, snakeCase
+  array, object
+} = require 'art-standard-lib'
 {CommunicationStatus:{missing}} = require 'art-foundation'
 {Pipeline} = require 'art-ery'
 RestClient = require 'art-rest-client'
@@ -65,7 +68,7 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
 
   ###################
   @classGetter
-    elasticsearchType:  -> @_elasticsearchType  ||= snakeCase @getName().split(/Search$/)[0]
+    elasticsearchType:  -> @_elasticsearchType  ||= snakeCase @getName()
     elasticsearchIndex: -> @_elasticsearchIndex ||= snakeCase config.index
     indexTypeUrl: -> "#{@getIndexUrl()}/#{@getElasticsearchType()}"
     searchUrl:    -> "#{@getIndexTypeUrl()}/_search"
@@ -86,13 +89,13 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     if routingField = @getRoutingField()
       unless present routingValue = data[routingField]
         throw new Error "routing field '#{routingField}' is not present in data: #{formattedInspect data}"
-      "&routing=#{encodeURIComponent routingValue}"
+      "?routing=#{encodeURIComponent routingValue}"
 
     else if parentField = @getParentField()
       unless present parentValue = data[parentField]
         throw new Error "parent field '#{parentField}' is not present in data: #{formattedInspect data}"
 
-      "&parent=#{encodeURIComponent parentValue}"
+      "?parent=#{encodeURIComponent parentValue}"
     else ""
 
   normalizeJsonRestClientResponse = (request, p) ->
@@ -110,18 +113,38 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html
     # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-types.html
     initialize: (request)->
-      request.subrequest request.pipeline, "vivifyIndex"
-      .then =>
-        normalizeJsonRestClientResponse request,
-          RestClient.putJson "#{@getIndexUrl()}/_mapping/#{@elasticsearchType}", @class.getMapping()
-
-    vivifyIndex: (request) ->
       request.subrequest request.pipeline, "indexExists"
-      .then (exists) ->
-        unless exists
-          request.subrequest request.pipeline, "createIndex"
+      .then (exists) =>
+        elasticsearchPipelines = array request.pipelines,
+          when: (v) -> v instanceof ElasticsearchPipeline
+
+        # the first elasticsearchPipeline gets the privledge of initializing all the rest
+        if elasticsearchPipelines[0] == request.pipeline && !exists
+          normalizeJsonRestClientResponse request,
+            RestClient.putJson @getIndexUrl(), #log "initializing all elasticsearchPipelines",
+              mappings: object elasticsearchPipelines,
+                key:  (pipeline) -> pipeline.elasticsearchType
+                with: (pipeline) -> pipeline.getMapping()
+          .then ->
+            status: "initialized"
+
         else
-          true
+          log
+            isFirst: elasticsearchPipelines[0] == request.pipeline
+            elasticsearchPipelines: elasticsearchPipelines
+            exists: exists
+          status: "alreadyInitialized"
+
+    # # NOTE - this is not safe to be run simultaneously... and I think it will be
+    # # what to do???
+    # # the problem is indexExists + createIndex is not atomic...
+    # vivifyIndex: (request) ->
+    #   request.subrequest request.pipeline, "indexExists"
+    #   .then (exists) ->
+    #     unless exists
+    #       request.subrequest request.pipeline, "createIndex"
+    #     else
+    #       true
 
     createIndex: (request) ->
       normalizeJsonRestClientResponse request, RestClient.putJson @getIndexUrl()
@@ -141,7 +164,7 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     deleteIndex: (request) ->
       request.require request.data?.force, "data.force=true required"
       .then =>
-        normalizeJsonRestClientResponse request, RestClient.delete @getIndexUrl()
+        normalizeJsonRestClientResponse request, RestClient.deleteJson @getIndexUrl()
 
 
     # add or update(replace) a 'document' in the index
@@ -162,9 +185,6 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
           RestClient.postJson @getUpdateUrl(key, data),
             doc:            data  # update fields in data
             doc_as_upsert:  true  # if doesn't exist, create with data
-      .catch (e) ->
-        log e
-        throw e
 
     # delete
     delete: (request) ->
