@@ -1,0 +1,64 @@
+import &ArtStandardLib, &ArtEry
+
+{MirroredElasticsearchPipeline} = Neptune.Art.Ery.Elasticsearch
+
+suite: ->
+  post = postSearch = null
+
+  setup ->
+    &ArtEry._reset()
+
+    class Post extends &ArtEry.KeyFieldsMixin &ArtEry.Pipeline
+      @addDatabaseFilters
+        text: :trimmedString
+
+      constructor: ->
+        super
+        @data = {}
+
+      @handlers
+        create: ({data})      -> @data[key] = merge data, id: key = randomString()
+        update: ({key, data}) -> @data[key] = merge @data[key], data
+
+    class PostSearch extends MirroredElasticsearchPipeline
+      @sourcePipelineName "post"
+      @mapping
+        properties:
+          text:   type: :text,    analyzer: :english
+
+    {post, postSearch} = pipelines
+
+    postSearch.indexExists()
+    .then (exists) -> postSearch.deleteIndex data: force: true if exists
+    .then -> postSearch.initialize()
+
+  test :initialize ->
+
+  test :create ->
+    post.create
+      data:
+        text:   "" The best posting ever
+    .then ({id}) ->
+      timeout 1000
+      .then ->
+        postSearch.elasticsearch data:
+          query: match: text: :post
+
+      .then (result) ->
+        assert.eq result.hits.total, 1
+        assert.eq result.hits.hits[0]._id, id
+
+  test :update ->
+    post.create
+      data:
+        text:   "" The best posting ever
+    .then ({id}) ->
+      post.update key: id, data: text: "" Actually, this is the best posting ever.
+      .then -> timeout 1000
+      .then ->
+        postSearch.elasticsearch data:
+          query: match: text: :actually
+
+      .then (result) ->
+        assert.eq result.hits.total, 1
+        assert.eq result.hits.hits[0]._id, id

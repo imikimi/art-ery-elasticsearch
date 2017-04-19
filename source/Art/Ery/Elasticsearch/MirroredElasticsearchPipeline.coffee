@@ -1,4 +1,4 @@
-{present, object, defineModule, array} = require 'art-standard-lib'
+{present, object, defineModule, array, log} = require 'art-standard-lib'
 {pipelines, UpdateAfterMixin, KeyFieldsMixin} = require 'art-ery'
 ElasticsearchPipeline = require "./ElasticsearchPipeline"
 
@@ -67,8 +67,48 @@ defineModule module, ->
 
     getElasticsearchData: (updatedData, response) ->
       object @getMapping().properties,
-        when: (v, k) -> updateData[k]?
-        with: (v, k) -> updateData[k]
+        when: (v, k) -> updatedData[k]?
+        with: (v, k) -> updatedData[k]
+
+    @getSourcePipelineName: -> @_sourcePipelineName
+    @getSourcePipeline:     -> pipelines[@_sourcePipelineName]
+    @sourcePipelineName:    (@_sourcePipelineName) ->
+
+      # TODO: implement deleteAfter in UpdateAfterMixin
+      # @deleteAfter
+      #   delete:
+      #     "#{@getSourcePipelineName()}": (response) ->
+      #       key: response.key
+
+      @updateAfter
+        create:
+          "#{@getSourcePipelineName()}": (response) ->
+            Promise.resolve @getElasticsearchData response.responseData, response
+            .then (elasticsearchData) =>
+              key:  response.responseData.id # TODO: Art.Ery should return the new key with "response.key", but it doesn't yet...
+              data: @_getElasticsearchDataWithRouting elasticsearchData, response
+
+        update:
+          "#{@getSourcePipelineName()}": (response) ->
+            Promise.resolve @getElasticsearchData response.requestData, response
+            .then (elasticsearchData) =>
+              key:  response.key
+              data: @_getElasticsearchDataWithRouting elasticsearchData, response
+
+    @handlers
+      search: (request) ->
+        {query} = request.data
+        request.require isString(query), "data.query string required"
+        .then ->
+          request.subrequest request.pipeline, "elasticsearch",
+            data: query: match: caption: query
+          .then (result) ->
+            array result.hits.hits, (hit) ->
+              merge hit._source, id: hit._id, _score: hit._score
+
+    ###############
+    # PRIVATE
+    ###############
 
     _getElasticsearchDataWithRouting: (elasticsearchData, response) ->
       routingField = @class.getRoutingField()
@@ -86,41 +126,3 @@ defineModule module, ->
           throw new Error "missing parent field: #{parentField}"
 
       elasticsearchData
-
-    @getSourcePipelineName: -> @_sourcePipelineName
-    @getSourcePipeline:     -> pipelines[@_sourcePipelineName]
-    @sourcePipelineName:    (@_sourcePipelineName) ->
-
-      # TODO: implement deleteAfter in UpdateAfterMixin
-      # @deleteAfter
-      #   delete:
-      #     "#{@getSourcePipelineName()}": (response) ->
-      #       key: response.key
-
-      @updateAfter
-        create:
-          "#{@getSourcePipelineName()}": (response) ->
-            Promise.resolve @getElasticsearchData response.responseData, response
-            .then (elasticsearchData) ->
-              log
-                key:  response.responseData.id # TODO: Art.Ery should return the new key with "response.key", but it doesn't yet...
-                data: @_getElasticsearchDataWithRouting elasticsearchData, response
-
-        update:
-          "#{@getSourcePipelineName()}": (response) ->
-            Promise.resolve @getElasticsearchData response.requestData, response
-            .then (elasticsearchData) ->
-              log
-                key:  response.key
-                data: @_getElasticsearchDataWithRouting elasticsearchData, response
-
-    @handlers
-      search: (request) ->
-        {query} = request.data
-        request.require isString(query), "data.query string required"
-        .then ->
-          request.subrequest request.pipeline, "elasticsearch",
-            data: query: match: caption: query
-          .then (result) ->
-            array result.hits.hits, (hit) ->
-              merge hit._source, id: hit._id, _score: hit._score
