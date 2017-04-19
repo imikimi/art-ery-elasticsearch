@@ -24,26 +24,26 @@ defineModule module, suite: ->
     .then (exists) -> userSearch.deleteIndex data: force: true if exists
     .then -> userSearch.initialize()
 
-  test "indexExists, deleteIndex and initialize", ->
+  test "indexExists, deleteIndex and initialize" ->
     userSearch.indexExists()
     .then (exists) ->
       assert.ok exists
 
   test "index then search", ->
-    userSearch.index key: "abc", data: email: "shanebdavis@imikimi.com", name: "Shane Delamore", about: "I like to make fun things."
+    userSearch.update key: :123, data: email: :shanebdavis@imikimi.com, name: "Shane Delamore", about: "I like to make fun things."
     .then -> timeout 1000 # it takes > 500ms for the new entry to show up in the search...
     .then -> userSearch.elasticsearch data: query: match: about: "thing"
     .then (out) -> assert.eq out.hits.total, 1
 
-  test "update-create then update-update then search", ->
-    userSearch.update key: "123", data: email: "shanebdavis@imikimi.com", name: "Shane Delamore", about: "I like to make fun things."
+  test "update-create then update-update then search" ->
+    userSearch.update key: :123, data: email: :shanebdavis@imikimi.com, name: "Shane Delamore", about: "I like to make fun things."
     .then -> timeout 1000 # it takes > 500ms for the new entry to show up in the search...
-    .then -> userSearch.elasticsearch data: query: match: about: "thing"
+    .then -> userSearch.elasticsearch data: query: match: about: :thing
     .then (out) -> assert.eq out.hits.total, 1
-    .then -> userSearch.update key: "123", data: email: "shanebdavis@gmail.com"
+    .then -> userSearch.update key: :123, data: email: :shanebdavis@gmail.com
 
     .then -> timeout 1000 # it takes > 500ms for the new entry to show up in the search...
-    .then -> userSearch.elasticsearch data: query: match: about: "thing"
+    .then -> userSearch.elasticsearch data: query: match: about: :thing
     .then (out) ->
       assert.eq out.hits.total, 1
       assert.eq
