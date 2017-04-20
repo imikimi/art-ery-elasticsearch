@@ -95,17 +95,6 @@ defineModule module, ->
               key:  response.key
               data: @_getElasticsearchDataWithRouting elasticsearchData, response
 
-    @handlers
-      search: (request) ->
-        {query} = request.data
-        request.require isString(query), "data.query string required"
-        .then ->
-          request.subrequest request.pipeline, "elasticsearch",
-            data: query: match: caption: query
-          .then (result) ->
-            array result.hits.hits, (hit) ->
-              merge hit._source, id: hit._id, _score: hit._score
-
     ###############
     # PRIVATE
     ###############

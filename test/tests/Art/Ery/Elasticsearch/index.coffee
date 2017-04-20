@@ -4,6 +4,7 @@
 module.exports = require './namespace'
 .addModules
   GrandparentChild:              require './GrandparentChild'             
+  Hashtags:                      require './Hashtags'                     
   IndexEntry:                    require './IndexEntry'                   
   MirroredElasticsearchPipeline: require './MirroredElasticsearchPipeline'
   ParentChild:                   require './ParentChild'                  

@@ -2,6 +2,8 @@
   formattedInspect, log, present, isPlainObject, defineModule, snakeCase
   array, object
   compactFlatten
+  objectWithout
+  mergeInto
 } = require 'art-standard-lib'
 {CommunicationStatus:{missing}} = require 'art-foundation'
 {Pipeline} = require 'art-ery'
@@ -121,13 +123,20 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
 
         # the first elasticsearchPipeline gets the privledge of initializing all the rest
         if elasticsearchPipelines[0] == request.pipeline && !exists
+          settings = {}
+
           normalizeJsonRestClientResponse request,
             RestClient.putJson @getIndexUrl(), #log "initializing all elasticsearchPipelines",
               mappings: object elasticsearchPipelines,
                 key:  (pipeline) -> pipeline.elasticsearchType
-                with: (pipeline) -> pipeline.getMapping()
-          .then ->
-            status: "initialized"
+                with: (pipeline) ->
+                  mapping = pipeline.getMapping()
+                  if mapping.settings
+                    mergeInto settings, mapping.settings
+                    objectWithout mapping, "settings"
+                  else
+                    mapping
+              settings: settings
 
         else
           log
