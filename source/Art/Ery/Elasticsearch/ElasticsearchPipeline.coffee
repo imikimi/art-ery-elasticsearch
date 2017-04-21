@@ -1,12 +1,12 @@
 {
   formattedInspect, log, present, isPlainObject, defineModule, snakeCase
-  array, object
+  array, object, find
   compactFlatten
   objectWithout
   mergeInto
 } = require 'art-standard-lib'
 {CommunicationStatus:{missing}} = require 'art-foundation'
-{Pipeline} = require 'art-ery'
+{Pipeline, pipelines} = require 'art-ery'
 RestClient = require 'art-rest-client'
 
 {config} = require "./ElasticsearchConfig"
@@ -111,39 +111,55 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     else
       throw error
 
-  @handlers
-    # using @fields, initialize the Elasticsearch index with proper field-types
-    # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html
-    # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-types.html
-    initialize: (request)->
-      request.subrequest request.pipeline, "indexExists"
-      .then (exists) =>
-        elasticsearchPipelines = array request.pipelines,
-          when: (v) -> v instanceof ElasticsearchPipeline
+  ###
+  using @fields, generate the correct 'mappings' data for initializing the Elasticsearch index
+  SEE:
+    https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html
+    https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-types.html
 
-        # the first elasticsearchPipeline gets the privledge of initializing all the rest
-        if elasticsearchPipelines[0] == request.pipeline && !exists
-          settings = {}
+  OUT: plain data-structue that is exactly what you can PUT to
+    elasticsearch to initialize all mappings for the current elasticsearchPipelines.
+  ###
+  @getElasticsearchMappings: ->
+    elasticsearchPipelines = array pipelines,
+      when: (v) -> v instanceof ElasticsearchPipeline
 
-          normalizeJsonRestClientResponse request,
-            RestClient.putJson @getIndexUrl(), #log "initializing all elasticsearchPipelines",
-              mappings: object elasticsearchPipelines,
-                key:  (pipeline) -> pipeline.elasticsearchType
-                with: (pipeline) ->
-                  mapping = pipeline.getMapping()
-                  if mapping.settings
-                    mergeInto settings, mapping.settings
-                    objectWithout mapping, "settings"
-                  else
-                    mapping
-              settings: settings
-
+    settings = {}
+    mappings: object elasticsearchPipelines,
+      key:  (pipeline) -> pipeline.elasticsearchType
+      with: (pipeline) ->
+        mapping = pipeline.getMapping()
+        if mapping.settings
+          mergeInto settings, mapping.settings
+          objectWithout mapping, "settings"
         else
-          log
-            isFirst: elasticsearchPipelines[0] == request.pipeline
-            elasticsearchPipelines: elasticsearchPipelines
-            exists: exists
-          status: "alreadyInitialized"
+          mapping
+    settings: settings
+
+  @getFirstElasticsearchPipeline: ->
+    find pipelines, when: (v) -> v instanceof ElasticsearchPipeline
+
+  @handlers
+
+    # SEE: getElasticsearchMappings
+    initialize: (request)->
+      # the first elasticsearchPipeline gets the privledge of initializing all the rest
+      if request.pipeline == ElasticsearchPipeline.getFirstElasticsearchPipeline()
+        request.subrequest request.pipeline, "indexExists"
+        .then (exists) =>
+          if !exists
+            normalizeJsonRestClientResponse request,
+              RestClient.putJson @getIndexUrl(), ElasticsearchPipeline.getElasticsearchMappings()
+          else
+            status: "alreadyInitialized"
+
+      else
+        status: "skipping"
+        info: """
+          The first ElasticsearchPipeline will initialize all the rest.
+
+          Use Art.Ery.sendInitializeRequestToAllPipelines() to initialize elasticsearch.
+          """
 
     createIndex: (request) ->
       normalizeJsonRestClientResponse request, RestClient.putJson @getIndexUrl()
@@ -165,9 +181,21 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
       .then =>
         normalizeJsonRestClientResponse request, RestClient.deleteJson @getIndexUrl()
 
+    get: (request) ->
+      {key, data} = request
+      request.require present(key), "key required, #{formattedInspect {key, data}}"
+      .then =>
+        normalizeJsonRestClientResponse request,
+          RestClient.getJson @getEntryUrl key, data
+      .then (got) =>
+        request.success
+          data: got._source
+          elasticsearch: objectWithout got, "_source"
 
-    # add or update(replace) a 'document' in the index
-    index: (request) ->
+    # Actually, this is: addOrReplace
+    # Adds or replaces a 'document' in the index
+    # this is not "create" since it doesn't generate a key - the key must be provided
+    add: (request) ->
       {key, data} = request
       request.require present(key) && isPlainObject(data), "key and data required, #{formattedInspect {key, data}}"
       .then =>
@@ -176,6 +204,7 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
 
     # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
     # Actually, this is createOrUpdate
+    # TODO: I'd probably rename this to createOrUpdate, but ArtEry.UpdateAfterMixin only supports "update" right now
     update: (request) ->
       {key, data} = request
       request.require present(key) && isPlainObject(data), "key and data required, #{formattedInspect {key, data}}"
