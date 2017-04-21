@@ -11,8 +11,12 @@ ArtEry Pipeline for Elasticsearch
 
 ##### Run
 
+Download the latest:
+
+* https://www.elastic.co/downloads/elasticsearch
+
 ```bash
-> ./elasticsearch-5.3.0/bin/elasticsearch
+> ./elasticsearch-5.3.1/bin/elasticsearch
 ```
 
 ##### Verify
