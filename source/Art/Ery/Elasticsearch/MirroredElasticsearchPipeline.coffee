@@ -70,6 +70,11 @@ defineModule module, ->
         when: (v, k) -> updatedData[k]?
         with: (v, k) -> updatedData[k]
 
+    # Opposite of getElasticsearchData
+    # override for custom elasticsearchDataFormat > applicationDbDataFormat
+    # OUT: object (not a promise!)
+    getApplicationData: (data) -> data
+
     @getSourcePipelineName: -> @_sourcePipelineName
     @getSourcePipeline:     -> pipelines[@_sourcePipelineName]
     @sourcePipelineName:    (@_sourcePipelineName) ->
@@ -90,10 +95,14 @@ defineModule module, ->
 
         update:
           "#{@getSourcePipelineName()}": (response) ->
-            Promise.resolve @getElasticsearchData response.requestData, response
+            Promise.resolve @getElasticsearchData response.responseProps.updatedData || response.requestData, response
             .then (elasticsearchData) =>
               key:  response.key
               data: @_getElasticsearchDataWithRouting elasticsearchData, response
+
+    @filter
+      after: get: (response) ->
+        response.withData @getApplicationData response.responseData
 
     ###############
     # PRIVATE
