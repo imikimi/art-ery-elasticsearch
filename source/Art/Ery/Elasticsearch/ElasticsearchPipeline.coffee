@@ -106,8 +106,10 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
       normalizeJsonRestClientError request, e
 
   normalizeJsonRestClientError = (request, error) ->
-    if error.info?.response?.error
-      request.failure data: error.info?.response?.error
+    if error.info
+      request.failure
+        status: error.info.status
+        data:   error.info.response
     else
       throw error
 
