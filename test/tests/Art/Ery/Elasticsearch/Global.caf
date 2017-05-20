@@ -1,0 +1,26 @@
+import &ArtStandardLib
+{missing} = &ArtCommunicationStatus
+{ElasticsearchPipeline} = &ArtEryElasticsearch
+{pipelines} = &ArtEry
+
+defineModule module, suite: ->
+  @timeout 10000
+
+  userSearch = null
+  setup ->
+    &ArtEry._reset()
+    class UserSearch extends ElasticsearchPipeline
+    {userSearch} = pipelines
+
+  test :indexExists ->
+    userSearch.indexExists()
+    .then assert.isBoolean
+
+  test :getIndicies ->
+    userSearch.getIndicies()
+    .then (val) ->
+      assert.isPlainObject val
+      each v, k in val
+        assert.isPlainObject v.aliases
+        assert.isPlainObject v.settings
+        assert.isPlainObject v.mappings

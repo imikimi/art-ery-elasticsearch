@@ -3,4 +3,5 @@
 defineModule module, class ElasticsearchConfig extends Configurable
   @defaults
     index:    "ArtEryElasticsearch"
-    endpoint: "http://localhost:9200"
+    endpoint: # "https://search-imikimi-zo-ws32l6szgwqfv6hivvp7j5wlsq.us-east-1.es.amazonaws.com"
+      "http://localhost:9200"

@@ -1,3 +1,4 @@
+require 'art-aws/Server'
 require 'caffeine-mc/register'
 require '../index.coffee'
 require "art-testbench/testing"

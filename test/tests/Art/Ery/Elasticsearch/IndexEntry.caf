@@ -23,6 +23,8 @@ defineModule module, suite: ->
     userSearch.indexExists()
     .then (exists) -> userSearch.deleteIndex data: force: true if exists
     .then -> userSearch.initialize()
+    .catch (e) ->
+      log.error {e}
 
   test "indexExists, deleteIndex and initialize" ->
     userSearch.indexExists()

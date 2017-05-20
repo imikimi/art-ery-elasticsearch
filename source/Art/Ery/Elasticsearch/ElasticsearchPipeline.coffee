@@ -4,14 +4,17 @@
   compactFlatten
   objectWithout
   mergeInto
+  isString
+  merge
 } = require 'art-standard-lib'
+{DeclarableMixin} = require 'art-class-system'
 {CommunicationStatus:{missing}} = require 'art-foundation'
 {Pipeline, pipelines} = require 'art-ery'
-RestClient = require 'art-rest-client'
+{Elasticsearch, Aws4RestClient} = require 'art-aws'
 
 {config} = require "./ElasticsearchConfig"
 
-defineModule module, class ElasticsearchPipeline extends Pipeline
+defineModule module, class ElasticsearchPipeline extends DeclarableMixin Pipeline
   @abstractClass()
 
   ###################
@@ -54,16 +57,10 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
             age:    type: "integer"
 
   ###
-  @extendableProperty mapping: {}
-  @mapping: @extendMapping
-
-  @getRoutingField: -> @_routingField
-  getRoutingField: -> @class.getRoutingField()
-  @routingField: (@_routingField) ->
-
-  @getParentField: -> @_parentField
-  getParentField: -> @class.getParentField()
-  @parentField: (@_parentField) ->
+  @declarable
+    parentField:  validate: isString
+    routingField: validate: isString
+    mapping:      extendable: {}
 
   ###################
   @classGetter
@@ -71,14 +68,27 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     elasticsearchIndex: -> @_elasticsearchIndex ||= snakeCase config.index
     indexTypeUrl: -> "#{@getIndexUrl()}/#{@getElasticsearchType()}"
     searchUrl:    -> "#{@getIndexTypeUrl()}/_search"
-    indexUrl:     (index) -> "#{config.endpoint}/#{index || @getElasticsearchIndex()}"
+    indexUrl:     (index) -> "/#{index || @getElasticsearchIndex()}"
 
   @getter
+    parentField:        -> @class.getParentField()
+
     elasticsearchType:  -> @class.getElasticsearchType()
     elasticsearchIndex: -> @class.getElasticsearchIndex()
     indexTypeUrl:       -> @class.getIndexTypeUrl()
     searchUrl:          -> @class.getSearchUrl()
     indexUrl:           (index) -> @class.getIndexUrl index
+    host:               -> config.endpoint
+
+    elasticsearchClient: -> @_elasticsearchClient ||= new Elasticsearch {
+      index:  @elasticsearchIndex
+      type:   @elasticsearchType
+      @parentField
+      @routingField
+      @host
+    }
+
+    restClient: -> @_aws4RestClient ||= new Aws4RestClient merge config, service: 'es'
 
   getEntryBaseUrl:  (id) -> "#{@getIndexUrl()}/#{@elasticsearchType}/#{id}"
   getEntryUrl:      (id, data) -> "#{@getEntryBaseUrl id}#{@getEntryUrlParams data}"
@@ -99,7 +109,6 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     ]
 
     "?#{params.join "&"}"
-
 
   normalizeJsonRestClientResponse = (request, p) ->
     p.catch (e) ->
@@ -151,7 +160,7 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
         .then (exists) =>
           if !exists
             normalizeJsonRestClientResponse request,
-              RestClient.putJson @getIndexUrl(), ElasticsearchPipeline.getElasticsearchMappings()
+              @restClient.putJson @getIndexUrl(), ElasticsearchPipeline.getElasticsearchMappings()
           else
             status: "alreadyInitialized"
 
@@ -164,13 +173,13 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
           """
 
     createIndex: (request) ->
-      normalizeJsonRestClientResponse request, RestClient.putJson @getIndexUrl()
+      normalizeJsonRestClientResponse request, @restClient.putJson @getIndexUrl()
 
-    listIndicies: (request) ->
-      RestClient.restRequest verb: "HEAD", url: @getIndexUrl "*"
+    getIndicies: (request) ->
+      @restClient.getJson @getIndexUrl "*"
 
     indexExists: (request) ->
-      RestClient.restRequest verb: "HEAD", url: @getIndexUrl()
+      @restClient.getJson @getIndexUrl()
       .then -> request.success data: true
       .catch (e) ->
         if e.status == missing
@@ -181,14 +190,15 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     deleteIndex: (request) ->
       request.require request.data?.force, "data.force=true required"
       .then =>
-        normalizeJsonRestClientResponse request, RestClient.deleteJson @getIndexUrl()
+        normalizeJsonRestClientResponse request, @restClient.deleteJson @getIndexUrl()
 
     get: (request) ->
       {key, data} = request
       request.require present(key), "key required, #{formattedInspect {key, data}}"
       .then =>
         normalizeJsonRestClientResponse request,
-          RestClient.getJson @getEntryUrl key, data
+          @restClient.getJson @getEntryUrl key, data
+          # @elasticsearchClient.get id: key, data: data
       .then (got) =>
         request.success
           data: got._source
@@ -202,7 +212,7 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
       request.require present(key) && isPlainObject(data), "key and data required, #{formattedInspect {key, data}}"
       .then =>
         normalizeJsonRestClientResponse request,
-          RestClient.putJson @getEntryUrl(key, data), data
+          @restClient.putJson @getEntryUrl(key, data), data
 
     # SEE: https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
     # Actually, this is createOrUpdate
@@ -212,7 +222,7 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
       request.require present(key) && isPlainObject(data), "key and data required, #{formattedInspect {key, data}}"
       .then =>
         normalizeJsonRestClientResponse request,
-          RestClient.postJson @getUpdateUrl(key, data),
+          @restClient.postJson @getUpdateUrl(key, data),
             doc:            data  # update fields in data
             doc_as_upsert:  true  # if doesn't exist, create with data
 
@@ -230,4 +240,4 @@ defineModule module, class ElasticsearchPipeline extends Pipeline
     elasticsearch: (request) ->
       {data} = request
       normalizeJsonRestClientResponse request,
-        RestClient.postJson @getSearchUrl(), data
+        @restClient.postJson @getSearchUrl(), data
