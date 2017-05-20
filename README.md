@@ -9,7 +9,7 @@ ArtEry Pipeline for Elasticsearch
 * [download elastic search](https://www.elastic.co/downloads/elasticsearch)
 * [official installation doc](https://www.elastic.co/guide/en/elasticsearch/guide/current/running-elasticsearch.html)
 
-##### Run
+### Local Testing
 
 Download the latest:
 
@@ -19,7 +19,7 @@ Download the latest:
 > ./elasticsearch-5.3.1/bin/elasticsearch
 ```
 
-##### Verify
+##### Verify the Server:
 
 * [click to test](http://localhost:9200/?pretty)
 
@@ -40,3 +40,19 @@ You should see something like this:
   "tagline" : "You Know, for Search"
 }
 ```
+
+##### Run tests
+
+```
+npm test
+```
+
+
+### Remote Testing
+
+Setup elasticsearch on AWS. Set up your IAM user. Use the comand below, but replace YOUR_SECRET and YOUR_KEY with your own keys.
+
+```bash
+artConfig='{"Art.Ery.Elasticsearch":{"credentials":{"secretAccessKey":"YOUR_SECRET","accessKeyId":"YOUR_KEY"},"endpoint":"https://search-imikimi-zo-ws32l6szgwqfv6hivvp7j5wlsq.us-east-1.es.amazonaws.com"}}' npm test
+```
+
