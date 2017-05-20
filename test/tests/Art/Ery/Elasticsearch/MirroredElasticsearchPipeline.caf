@@ -4,6 +4,7 @@ import &ArtStandardLib, &ArtEry
 
 suite: ->
   post = postSearch = null
+  @timeout 10000
 
   setup ->
     &ArtEry._reset()
