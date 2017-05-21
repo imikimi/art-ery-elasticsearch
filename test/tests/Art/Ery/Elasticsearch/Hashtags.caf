@@ -2,6 +2,20 @@ import &ArtStandardLib
 {missing} = &ArtCommunicationStatus
 {ElasticsearchPipeline} = &ArtEryElasticsearch
 {pipelines} = &ArtEry
+##
+  This is an example of how to do #hashTags.
+  The ideas came from: http://blog.pixlee.com/finding-hashtags-in-elasticsearch
+
+  SBD NOTE:
+    I've decided NOT to use this method.
+    I've decided it's best to have my own pre-process step
+    that extracts hashTags and puts them in their own list-field-type.
+
+    That way hashTags can be found exactly OR with word-stemming, etc,
+    when not using the #-symbol. Example:
+
+      #foo -> matches only /#foo\b/i
+      foo -> matches "#fooing #fooed and #fooy"
 
 defineModule module, suite: ->
   @timeout 10000
@@ -9,9 +23,6 @@ defineModule module, suite: ->
   postSearch = null
 
   setup ->
-    &ArtEry._reset()
-
-    # http://blog.pixlee.com/finding-hashtags-in-elasticsearch
 
     class PostSearch extends ElasticsearchPipeline
       @mapping
@@ -52,9 +63,8 @@ defineModule module, suite: ->
 
     {postSearch} = pipelines
 
-    postSearch.indexExists()
-    .then (exists) -> postSearch.deleteIndex data: force: true if exists
-    .then -> postSearch.initialize()
+    pipelines.elasticsearchGlobal.deleteIndex returnNullIfMissing: true, data: force: true
+    .then -> pipelines.elasticsearchGlobal.initialize()
 
   test "initialize" ->
 

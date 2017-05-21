@@ -9,8 +9,6 @@ defineModule module, suite: ->
   userSearch = postSearch = null
 
   setup ->
-    &ArtEry._reset()
-
     class UserSearch extends ElasticsearchPipeline
       @mapping
         properties:
@@ -20,11 +18,14 @@ defineModule module, suite: ->
 
     {userSearch, postSearch} = pipelines
 
-    userSearch.indexExists()
-    .then (exists) -> userSearch.deleteIndex data: force: true if exists
-    .then -> userSearch.initialize()
-    .catch (e) ->
-      log.error {e}
+    # userSearch.indexExists()
+    # .then (exists) -> userSearch.deleteIndex data: force: true if exists
+    # .then -> userSearch.initialize()
+    # .catch (e) ->
+    #   log.error {e}
+
+    pipelines.elasticsearchGlobal.deleteIndex returnNullIfMissing: true, data: force: true
+    .then -> pipelines.elasticsearchGlobal.initialize()
 
   test "indexExists, deleteIndex and initialize" ->
     userSearch.indexExists()

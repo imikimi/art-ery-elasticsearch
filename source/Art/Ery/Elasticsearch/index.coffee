@@ -5,7 +5,5 @@ module.exports = require './namespace'
 module.exports
 .includeInNamespace require './Elasticsearch'
 .addModules
-  ElasticsearchConfig:           require './ElasticsearchConfig'          
-  ElasticsearchPipeline:         require './ElasticsearchPipeline'        
-  MirroredElasticsearchPipeline: require './MirroredElasticsearchPipeline'
+  ElasticsearchConfig: require './ElasticsearchConfig'
 require './Pipelines'

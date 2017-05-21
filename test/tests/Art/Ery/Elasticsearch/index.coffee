@@ -4,7 +4,7 @@
 module.exports = require './namespace'
 module.exports
 .addModules
-  Global:                        require './Global'                       
+  ElasticsearchGlobal:           require './ElasticsearchGlobal'          
   GrandparentChild:              require './GrandparentChild'             
   Hashtags:                      require './Hashtags'                     
   IndexEntry:                    require './IndexEntry'                   

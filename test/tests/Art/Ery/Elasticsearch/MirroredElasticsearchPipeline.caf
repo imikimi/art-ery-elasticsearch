@@ -7,7 +7,8 @@ suite: ->
   @timeout 10000
 
   setup ->
-    &ArtEry._reset()
+    &ArtEry._reset (pipeline) ->
+      pipeline.getName() != :elasticsearchGlobal
 
     class Post extends &ArtEry.KeyFieldsMixin &ArtEry.Pipeline
       @addDatabaseFilters
@@ -29,9 +30,8 @@ suite: ->
 
     {post, postSearch} = pipelines
 
-    postSearch.indexExists()
-    .then (exists) -> postSearch.deleteIndex data: force: true if exists
-    .then -> postSearch.initialize()
+    pipelines.elasticsearchGlobal.deleteIndex returnNullIfMissing: true, data: force: true
+    .then -> pipelines.elasticsearchGlobal.initialize()
 
   test :initialize ->
 

@@ -6,13 +6,8 @@ import &ArtStandardLib
 defineModule module, suite: ->
   @timeout 10000
 
-  userSearch = null
-  setup ->
-    class UserSearch extends ElasticsearchPipeline
-    {userSearch} = pipelines
-
   test :indexExists ->
-    userSearch.indexExists()
+    pipelines.elasticsearchGlobal.indexExists()
     .then assert.isBoolean
 
   test :getIndicies ->
