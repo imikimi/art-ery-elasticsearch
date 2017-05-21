@@ -9,6 +9,7 @@ suite: ->
   userSearch = postSearch = feedSearch = null
 
   setup ->
+
     class UserSearch extends ElasticsearchPipeline
       @mapping
         properties:
@@ -38,9 +39,6 @@ suite: ->
 
     {userSearch, postSearch, feedSearch} = pipelines
 
-    # userSearch.indexExists()
-    # .then (exists) -> userSearch.deleteIndex data: force: true if exists
-    # .then -> userSearch.initialize()
     pipelines.elasticsearchGlobal.deleteIndex returnNullIfMissing: true, data: force: true
     .then -> pipelines.elasticsearchGlobal.initialize()
 
