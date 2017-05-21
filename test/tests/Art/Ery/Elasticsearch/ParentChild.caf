@@ -40,6 +40,14 @@ suite: ->
         userId: :abc
         text:   "" This is the best post ever
 
+  test "user", ->
+    userSearch.update
+      key: :abc
+      data:
+        email:  :shanebdavis@imikimi.com
+        name:   :Shane
+        about:  "" I made this!
+
   test "post illegal without parent-id field", ->
     assert.rejects postSearch.update
       key: :123

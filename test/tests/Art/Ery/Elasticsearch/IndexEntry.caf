@@ -3,13 +3,12 @@ import &ArtStandardLib
 {ElasticsearchPipeline} = &ArtEryElasticsearch
 {pipelines} = &ArtEry
 
-defineModule module, suite: ->
+suite: ->
   @timeout 10000
 
   userSearch = postSearch = null
 
   setup ->
-
     class UserSearch extends ElasticsearchPipeline
       @mapping
         properties:
@@ -23,8 +22,9 @@ defineModule module, suite: ->
     .then -> pipelines.elasticsearchGlobal.initialize()
 
   test "indexExists, deleteIndex and initialize" ->
-    userSearch.indexExists()
+    pipelines.elasticsearchGlobal.indexExists()
     .then (exists) ->
+      assert.isBoolean exists
       assert.ok exists
 
   test "index then search", ->
