@@ -5,3 +5,4 @@ Ery = require '../namespace'
 module.exports = Ery.Elasticsearch ||
 Ery.addNamespace 'Elasticsearch', class Elasticsearch extends Neptune.Base
   ;
+require './Pipelines/namespace'
