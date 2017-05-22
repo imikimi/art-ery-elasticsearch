@@ -1,4 +1,4 @@
-{present, object, defineModule, array, log} = require 'art-standard-lib'
+{present, object, defineModule, array, log, isString} = require 'art-standard-lib'
 {pipelines, UpdateAfterMixin, KeyFieldsMixin} = require 'art-ery'
 ElasticsearchPipeline = require "./ElasticsearchPipeline"
 
@@ -29,21 +29,27 @@ defineModule module, ->
   class MirroredElasticsearchPipeline extends UpdateAfterMixin KeyFieldsMixin ElasticsearchPipeline
     @abstractClass()
 
+    #####################
+    # Declarable API
+    #####################
+    @declarable   sourcePipelineName: validate: isString
+    @classGetter  sourcePipeline: -> pipelines[@getSourcePipelineName()]
+    @getter       sourcePipeline: -> pipelines[@getSourcePipelineName()]
+
+    #####################
+    # Optional Overrides
+    #####################
     ###
     IN:
       sourceData:
-        This is just a shortcut to the data you usually need from the response object:
+        extracted from sourcePipelineResponse:
 
-        if response.type == 'update'
-          response.requestData
-          # generally, you only need to re-index the updated fields
+        sourceData =
+          sourcePipelineResponse.responseProps.updatedData ||
+          sourcePipelineResponse.responseData ||
+          sourcePipelineResponse.requestData
 
-        if response.type == 'create'
-          response.responseData
-          # generally, you'll want the created object's ID
-          # and that's only in responseData.
-
-      response: Art.Ery.Response from a create or update request on the @pipelineToIndex
+      sourcePipelineResponse: Art.Ery.Response from a get, create or update request on the @sourcePipeline
 
     OUT:
       promise.then (data) ->
@@ -61,44 +67,43 @@ defineModule module, ->
         else throw new Error "not supported"
 
     DEFAULT:
-      The default implementation selects all the fields from updatedData that are
+      The default implementation selects all the fields from sourceData that are
       in the properties defined by @mapping.
     ###
 
-    getElasticsearchData: (updatedData, response) ->
+    getElasticsearchData: (sourceData, sourcePipelineResponse) ->
       object @getMapping().properties,
-        when: (v, k) -> updatedData[k]?
-        with: (v, k) -> updatedData[k]
+        when: (v, k) -> sourceData[k]?
+        with: (v, k) -> sourceData[k]
 
     # Opposite of getElasticsearchData
     # override for custom elasticsearchDataFormat > applicationDbDataFormat
     # OUT: object (not a promise!)
     getApplicationData: (data) -> data
 
-    @getSourcePipelineName: -> @_sourcePipelineName
-    @getSourcePipeline:     -> pipelines[@_sourcePipelineName]
-    @sourcePipelineName:    (@_sourcePipelineName) ->
+    ######################
+    # PUBLIC IMPLEMENTATION
+    ######################
+    @postCreateConcreteClass: ->
+      out = super
+
+      throw new Error "sourcePipelineName invalid: #{formattedInspect getSourcePipelineName()}" unless isString @getSourcePipelineName()
 
       # TODO: implement deleteAfter in UpdateAfterMixin
       # @deleteAfter
-      #   delete:
-      #     "#{@getSourcePipelineName()}": (response) ->
-      #       key: response.key
+      #   delete: "#{@getSourcePipelineName()}": (response) -> key: response.key
 
       @updateAfter
-        create:
-          "#{@getSourcePipelineName()}": (response) ->
-            Promise.resolve @getElasticsearchData response.responseData, response
-            .then (elasticsearchData) =>
-              key:  response.responseData.id # TODO: Art.Ery should return the new key with "response.key", but it doesn't yet...
-              data: @_getElasticsearchDataWithRouting elasticsearchData, response
+        create: "#{@getSourcePipelineName()}": (response) -> @_getElasticsearchUpdateProps response
+        update: "#{@getSourcePipelineName()}": (response) -> @_getElasticsearchUpdateProps response
 
-        update:
-          "#{@getSourcePipelineName()}": (response) ->
-            Promise.resolve @getElasticsearchData response.responseProps.updatedData || response.requestData, response
-            .then (elasticsearchData) =>
-              key:  response.key
-              data: @_getElasticsearchDataWithRouting elasticsearchData, response
+      out
+
+    @handler
+      reindex: (request) ->
+        request.subrequest @getSourcePipelineName(), "get", key: request.key, returnResponseObject: true
+        .then (response)    => @_getElasticsearchUpdateProps response
+        .then (updateProps) => request.subrequest request.pipeline, "addOrReplace", updateProps
 
     @filter
       after: get: (response) ->
@@ -107,6 +112,17 @@ defineModule module, ->
     ###############
     # PRIVATE
     ###############
+
+    _getElasticsearchUpdateProps: (sourcePipelineResponse)->
+      sourceData =
+        sourcePipelineResponse.responseProps.updatedData ||
+        sourcePipelineResponse.responseData ||
+        sourcePipelineResponse.requestData
+
+      Promise.resolve @getElasticsearchData sourceData, sourcePipelineResponse
+      .then (elasticsearchData) =>
+        key:  sourcePipelineResponse.responseData?.id || sourcePipelineResponse.key
+        data: @_getElasticsearchDataWithRouting elasticsearchData, sourcePipelineResponse
 
     _getElasticsearchDataWithRouting: (elasticsearchData, response) ->
       routingField = @class.getRoutingField()

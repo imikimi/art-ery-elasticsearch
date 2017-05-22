@@ -19,7 +19,8 @@ suite: ->
         @data = {}
 
       @handlers
-        create: ({data})      -> @data[key] = merge data, id: key = randomString()
+        get:    ({key})       -> @data[key]
+        create: ({data})      -> key = randomString(); @data[key] = merge data, id: key
         update: ({key, data}) -> @data[key] = merge @data[key], data
 
     class PostSearch extends MirroredElasticsearchPipeline
@@ -59,6 +60,22 @@ suite: ->
       .then ->
         postSearch.elasticsearch data:
           query: match: text: :actually
+
+      .then (result) ->
+        assert.eq result.hits.total, 1
+        assert.eq result.hits.hits[0]._id, id
+
+  test :reindex ->
+    post.create
+      data:
+        text: "" So good, actually, that I need to index it twice.
+    .then (data) ->
+      {id} = data
+      postSearch.reindex key: id
+      .then -> timeout 1000
+      .then ->
+        postSearch.elasticsearch data:
+          query: match: text: :good
 
       .then (result) ->
         assert.eq result.hits.total, 1
