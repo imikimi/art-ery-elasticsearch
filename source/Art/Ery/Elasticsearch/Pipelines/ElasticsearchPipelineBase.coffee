@@ -17,7 +17,7 @@
 defineModule module, class ElasticsearchPipelineBase extends DeclarableMixin Pipeline
   @abstractClass()
   @getter
-    restClient:           -> @_aws4RestClient     ||= new Aws4RestClient merge config, service: 'es'
+    restClient:           -> new Aws4RestClient merge config, service: 'es'
     elasticsearchIndex:   -> @_elasticsearchIndex ||= snakeCase config.index
     indexUrl:     (index) -> "/#{index || @getElasticsearchIndex()}"
 
