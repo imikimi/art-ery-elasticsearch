@@ -101,10 +101,9 @@ defineModule module, class ElasticsearchPipeline extends require './Elasticsearc
           data: got._source
           elasticsearch: objectWithout got, "_source"
 
-    # Actually, this is: addOrReplace
     # Adds or replaces a 'document' in the index
     # this is not "create" since it doesn't generate a key - the key must be provided
-    add: (request) ->
+    addOrReplace: (request) ->
       {key, data} = request
       request.require present(key) && isPlainObject(data), "key and data required, #{formattedInspect {key, data}}"
       .then =>
