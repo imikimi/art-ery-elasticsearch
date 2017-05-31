@@ -1,4 +1,4 @@
-{present, object, defineModule, array, log, isString} = require 'art-standard-lib'
+{present, object, defineModule, array, log, isString, formattedInspect} = require 'art-standard-lib'
 {pipelines, UpdateAfterMixin, KeyFieldsMixin} = require 'art-ery'
 ElasticsearchPipeline = require "./ElasticsearchPipeline"
 
@@ -133,10 +133,10 @@ defineModule module, ->
 
       if routingField
         unless present elasticsearchData[routingField] ||= responseData[routingField] || requestData[routingField]
-          throw new Error "missing routing field: #{routingField}"
+          throw new Error "missing routing field: #{formattedInspect {routingField, requestData, responseData}}"
 
       if parentField
         unless present elasticsearchData[parentField] ||= responseData[parentField] || requestData[parentField]
-          throw new Error "missing parent field: #{parentField}"
+          throw new Error "missing parent field: #{formattedInspect {parentField, requestData, responseData}}"
 
       elasticsearchData
