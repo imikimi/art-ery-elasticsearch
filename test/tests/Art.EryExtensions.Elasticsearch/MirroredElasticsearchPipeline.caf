@@ -8,7 +8,7 @@ suite: ->
     &ArtEry._reset (pipeline) ->
       pipeline.getName() != :elasticsearchGlobal
 
-    class Post extends &ArtEry.KeyFieldsMixin &ArtEry.Pipeline
+    class Post extends UpdateAfterMixin KeyFieldsMixin Pipeline
       @addDatabaseFilters
         text: :trimmedString
 
