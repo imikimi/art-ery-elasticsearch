@@ -1,6 +1,4 @@
-import &ArtStandardLib, &ArtEry
-
-{MirroredElasticsearchPipeline} = Neptune.Art.Ery.Elasticsearch
+import &StandardImport
 
 suite: ->
   post = postSearch = null

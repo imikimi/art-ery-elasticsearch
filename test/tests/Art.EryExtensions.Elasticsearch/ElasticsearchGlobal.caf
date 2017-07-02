@@ -1,9 +1,6 @@
-import &ArtStandardLib
-{missing} = &ArtCommunicationStatus
-{ElasticsearchPipeline} = &ArtEryElasticsearch
-{pipelines} = &ArtEry
+import &StandardImport
 
-defineModule module, suite: ->
+suite: ->
   @timeout 10000
 
   test :indexExists ->

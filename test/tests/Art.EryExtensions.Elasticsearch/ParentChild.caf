@@ -1,7 +1,4 @@
-import &ArtStandardLib
-{missing} = &ArtCommunicationStatus
-{ElasticsearchPipeline} = &ArtEryElasticsearch
-{pipelines} = &ArtEry
+import &StandardImport
 
 suite: ->
   @timeout 10000

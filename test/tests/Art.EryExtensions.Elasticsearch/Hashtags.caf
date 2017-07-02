@@ -1,7 +1,4 @@
-import &ArtStandardLib
-{missing} = &ArtCommunicationStatus
-{ElasticsearchPipeline} = &ArtEryElasticsearch
-{pipelines} = &ArtEry
+import &StandardImport
 ##
   This is an example of how to do #hashTags.
   The ideas came from: http://blog.pixlee.com/finding-hashtags-in-elasticsearch

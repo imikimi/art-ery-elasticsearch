@@ -1,1 +1,1 @@
-module.exports = require './source/Art/Ery/Elasticsearch'
+module.exports = require './source/Art.EryExtensions.Elasticsearch'
