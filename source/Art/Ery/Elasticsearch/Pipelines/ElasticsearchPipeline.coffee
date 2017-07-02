@@ -6,9 +6,10 @@
   mergeInto
   isString
   merge
+  isFunction
 } = require 'art-standard-lib'
 {DeclarableMixin} = require 'art-class-system'
-{CommunicationStatus:{missing}} = require 'art-foundation'
+{missing, clientFailure} = require 'art-communication-status'
 {Pipeline, pipelines} = require 'art-ery'
 
 {config} = require "../ElasticsearchConfig"
@@ -121,6 +122,13 @@ defineModule module, class ElasticsearchPipeline extends require './Elasticsearc
           @restClient.postJson @getUpdateUrl(key, data),
             doc:            data  # update fields in data
             doc_as_upsert:  true  # if doesn't exist, create with data
+      .then (response) =>
+        if response.status == clientFailure &&
+            response.data?.error?.root_cause?[0]?.type == "version_conflict_engine_exception" &&
+            isFunction @reindex
+          request.subrequest request.pipelineName, "reindex", {key}
+        else
+          response
 
     # delete
     delete: (request) ->
