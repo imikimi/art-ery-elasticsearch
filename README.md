@@ -19,6 +19,13 @@ Download the latest:
 > ./elasticsearch-5.3.1/bin/elasticsearch
 ```
 
+##### Handy
+
+* [list all indicies](http://localhost:9200/*?pretty): `&ArtRestClient.getJson "http://localhost:9200/*"`
+* [list all records](http://localhost:9200/my_index/_search?pretty): `&ArtRestClient.getJson "http://localhost:9200/my_index/_search"`
+* delete index: `&ArtRestClient.delete "http://localhost:9200/my_index"`
+
+
 ##### Verify the Server:
 
 * [click to test](http://localhost:9200/?pretty)
