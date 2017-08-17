@@ -54,6 +54,8 @@ defineModule module, class ElasticsearchGlobal extends require './ElasticsearchP
         else
           status: "alreadyInitialized"
 
+    getInitializeParams: (request) -> @class.getElasticsearchMappings()
+
     getIndicies: (request) ->
       @restClient.getJson "/*"
 
