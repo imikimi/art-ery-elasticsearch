@@ -88,14 +88,19 @@ defineModule module, class ElasticsearchPipeline extends require './Elasticsearc
 
     "?#{params.join "&"}"
 
+  getEntryUrlFromRequest: (request) ->
+    {key, data} = request
+    request.require present(key), "key required for #{request.type}: #{formattedInspect {key, data}}"
+    .then => @getEntryUrl key, data
+
   @handlers
 
     get: (request) ->
       {key, data} = request
-      request.require present(key), "key required, #{formattedInspect {key, data}}"
-      .then =>
+      @getEntryUrlFromRequest request
+      .then (url) =>
         @normalizeJsonRestClientResponse request,
-          @restClient.getJson @getEntryUrl key, data
+          @restClient.getJson url
           # @elasticsearchClient.get id: key, data: data
       .then (got) =>
         request.success
@@ -132,7 +137,23 @@ defineModule module, class ElasticsearchPipeline extends require './Elasticsearc
 
     # delete
     delete: (request) ->
-      request.require false # TODO!
+      @getEntryUrlFromRequest request
+      .then (url) =>
+        @normalizeJsonRestClientResponse request,
+          @restClient.deleteJson url
+      .then (deleteResult) ->
+        # deleteResult looks like:
+        #   found: true
+        #   _index: "imikimi_oz_test"
+        #   _type: "topic_search"
+        #   _id: "wCe2JvAH5L0g"
+        #   _version: 2
+        #   result: "deleted"
+        #   _shards:
+        #     total: 2
+        #     successful: 1
+        #     failed: 0
+        request.success props: deleteResult
 
     ###
     perform a search

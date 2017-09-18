@@ -97,6 +97,9 @@ defineModule module, ->
         create: "#{@getSourcePipelineName()}": (response) -> @_getElasticsearchUpdateProps response
         update: "#{@getSourcePipelineName()}": (response) -> @_getElasticsearchUpdateProps response
 
+      @deleteAfter
+        delete: "#{@getSourcePipelineName()}": ({responseData, key}) -> key: key, data: responseData
+
       out
 
     @handler
@@ -104,6 +107,16 @@ defineModule module, ->
         request.subrequest @getSourcePipelineName(), "get", key: request.key, returnResponseObject: true
         .then (response)    => @_getElasticsearchUpdateProps response
         .then (updateProps) => request.subrequest request.pipeline, "addOrReplace", updateProps
+
+      # not efficient
+      # only to be used in dev / small dbs
+      reindexAll: (request) ->
+        request.subrequest @getSourcePipelineName(), "getAll"
+        .then (items) ->
+          Promise.all(for {id} in items
+            request.subrequest request.pipelineName, "reindex", id
+          ).then ->
+            reindexed: items.length
 
     @filter
       after: get: (response) ->

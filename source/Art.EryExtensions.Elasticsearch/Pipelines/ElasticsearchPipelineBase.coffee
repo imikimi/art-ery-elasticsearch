@@ -25,7 +25,7 @@ defineModule module, class ElasticsearchPipelineBase extends DeclarableMixin Pip
     p.catch (e) => @normalizeJsonRestClientError request, e
 
   normalizeJsonRestClientError: (request, error) ->
-    if error.info
-      request.toResponse error.info.status, data: error.info.response
+    if error.status
+      request.toResponse error.status, data: error.data
     else
       throw error
