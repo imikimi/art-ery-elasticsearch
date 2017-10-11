@@ -1,4 +1,4 @@
-{present, object, defineModule, array, log, isString, formattedInspect} = require 'art-standard-lib'
+{present, object, defineModule, array, log, isString, formattedInspect, Promise} = require 'art-standard-lib'
 {pipelines, UpdateAfterMixin, KeyFieldsMixin} = require 'art-ery'
 ElasticsearchPipeline = require "./ElasticsearchPipeline"
 
