@@ -25,6 +25,7 @@ rm -rf $INSTALLDIR
 echo "ELASTICSEARCH: unzipping v$VERSION"
 unzip $DIR/elasticsearch-$VERSION.zip -d $DIR> /dev/null
 echo "ELASTICSEARCH: starting server v$VERSION with PIDFILE $PIDFILE"
+rm $PIDFILE
 $INSTALLDIR/bin/elasticsearch -d -p $PIDFILE
 
 while [ ! -f "$PIDFILE" ]
