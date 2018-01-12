@@ -1,4 +1,4 @@
-{present, object, defineModule, array, log, isString, formattedInspect, Promise} = require 'art-standard-lib'
+{present, merge, object, defineModule, array, log, isString, formattedInspect, Promise} = require 'art-standard-lib'
 {pipelines, UpdateAfterMixin, KeyFieldsMixin} = require 'art-ery'
 ElasticsearchPipeline = require "./ElasticsearchPipeline"
 
@@ -49,7 +49,10 @@ defineModule module, ->
           sourcePipelineResponse.responseData ||
           sourcePipelineResponse.requestData
 
-      sourcePipelineResponse: Art.Ery.Response from a get, create or update request on the @sourcePipeline
+      parentRequestOrResponse:
+        # NOTE: this should only be used for creating subrequests.
+        # If this is called in response to a create/update, then it'll be the response to that action.
+        # However, it could also be called by reindexAll, in which it may be the request object for reindex all
 
     OUT:
       promise.then (data) ->
@@ -71,7 +74,7 @@ defineModule module, ->
       in the properties defined by @mapping.
     ###
 
-    getElasticsearchData: (sourceData, sourcePipelineResponse) ->
+    getElasticsearchData: (sourceData, parentRequestOrResponse) ->
       object @getMapping().properties,
         when: (v, k) -> sourceData[k]?
         with: (v, k) -> sourceData[k]
@@ -104,17 +107,23 @@ defineModule module, ->
 
     @handler
       reindex: (request) ->
-        request.subrequest @getSourcePipelineName(), "get", key: request.key, returnResponseObject: true
-        .then (response)    => @_getElasticsearchUpdateProps response
-        .then (updateProps) => request.subrequest request.pipeline, "addOrReplace", updateProps
+        if request.data
+          @_getElasticsearchUpdateProps request, request.data
+          .then (updateProps) =>
+            request.subrequest request.pipeline, "addOrReplace", updateProps
+        else
+          request.require request.key
+          .then => request.subrequest @getSourcePipelineName(), "get", key: request.key, returnResponseObject: true
+          .then (response)    => @_getElasticsearchUpdateProps response
+          .then (updateProps) => request.subrequest request.pipeline, "addOrReplace", updateProps
 
       # not efficient
       # only to be used in dev / small dbs
       reindexAll: (request) ->
         request.subrequest @getSourcePipelineName(), "getAll"
-        .then (items) ->
-          Promise.all(for {id} in items
-            request.subrequest request.pipelineName, "reindex", id
+        .then (items) =>
+          Promise.all(for data in items
+            request.subrequest request.pipeline, "reindex", {data}
           ).then ->
             reindexed: items.length
 
@@ -126,30 +135,30 @@ defineModule module, ->
     # PRIVATE
     ###############
 
-    _getElasticsearchUpdateProps: (sourcePipelineResponse)->
-      sourceData =
-        sourcePipelineResponse.responseProps.updatedData ||
-        sourcePipelineResponse.responseData ||
+    _getElasticsearchUpdateProps: (sourcePipelineResponse, sourceData)->
+      sourceData ||= merge(
         sourcePipelineResponse.requestData
+        sourcePipelineResponse.responseData
+        sourcePipelineResponse.responseProps.updatedData
+      )
 
       Promise.resolve @getElasticsearchData sourceData, sourcePipelineResponse
       .then (elasticsearchData) =>
-        key:  sourcePipelineResponse.responseData?.id || sourcePipelineResponse.key
-        data: @_getElasticsearchDataWithRouting elasticsearchData, sourcePipelineResponse
+        key:  sourceData?.id || sourcePipelineResponse.key
+        data: @_getElasticsearchDataWithRouting elasticsearchData, sourceData
 
-    _getElasticsearchDataWithRouting: (elasticsearchData, response) ->
+    _getElasticsearchDataWithRouting: (elasticsearchData, sourceData) ->
       routingField = @class.getRoutingField()
       parentField = @class.getParentField()
-      {requestData, responseData} = response
 
       elasticsearchData = object elasticsearchData if routingField || parentField
 
       if routingField
-        unless present elasticsearchData[routingField] ||= responseData[routingField] || requestData[routingField]
-          throw new Error "missing routing field: #{formattedInspect {routingField, requestData, responseData}}"
+        unless present elasticsearchData[routingField] ||= sourceData[routingField]
+          throw new Error "missing routing field: #{formattedInspect {routingField, requestData, sourceData}}"
 
       if parentField
-        unless present elasticsearchData[parentField] ||= responseData[parentField] || requestData[parentField]
-          throw new Error "missing parent field: #{formattedInspect {parentField, requestData, responseData}}"
+        unless present elasticsearchData[parentField] ||= sourceData[parentField]
+          throw new Error "missing parent field: #{formattedInspect {parentField, requestData, sourceData}}"
 
       elasticsearchData

@@ -58,14 +58,15 @@ defineModule module, class ElasticsearchPipeline extends require './Elasticsearc
 
   ###
   @declarable
-    parentField:  validate: isString
-    routingField: validate: isString
+    parentField:        validate: isString
+    routingField:       validate: isString
+    elasticsearchType:  validate: isString # default: snakeCase class.getName()
     mapping:      extendable: {}
 
   ###################
   @getter
-    elasticsearchType:  -> @_elasticsearchType  ||= snakeCase @class.getName()
-    indexTypeUrl:       -> "#{@getIndexUrl()}/#{@getElasticsearchType()}"
+    elasticsearchType:  -> @class._elasticsearchType ||= snakeCase @class.getName()
+    indexTypeUrl:       -> "#{@getIndexUrl()}/#{@elasticsearchType}"
     searchUrl:          -> "#{@getIndexTypeUrl()}/_search"
 
   getEntryBaseUrl:  (id) -> "#{@getIndexUrl()}/#{@elasticsearchType}/#{id}"
