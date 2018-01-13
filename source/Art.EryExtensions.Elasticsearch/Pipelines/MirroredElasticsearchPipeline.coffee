@@ -131,9 +131,15 @@ defineModule module, ->
 
       request.subrequest @getSourcePipelineName(), "getAll",
         returnResponse: true
-        props: {lastEvaluatedKey, limit}
+        originatedOnServer: true
+        props: {
+          include: false
+          lastEvaluatedKey
+          limit
+        }
 
       .then ({props: {lastEvaluatedKey, data: items}}) =>
+        # log item0: items[0], count: items.length, lastEvaluatedKey: lastEvaluatedKey
         Promise.all(for data in items
           request.subrequest request.pipeline, "reindex", {data}
         ).then =>
