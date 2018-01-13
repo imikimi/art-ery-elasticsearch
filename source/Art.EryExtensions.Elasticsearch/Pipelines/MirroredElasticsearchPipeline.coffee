@@ -1,4 +1,4 @@
-{present, merge, object, defineModule, array, log, isString, formattedInspect, Promise} = require 'art-standard-lib'
+{present, merge, isArray, object, defineModule, array, log, isString, formattedInspect, Promise} = require 'art-standard-lib'
 {pipelines, UpdateAfterMixin, KeyFieldsMixin} = require 'art-ery'
 ElasticsearchPipeline = require "./ElasticsearchPipeline"
 
@@ -120,12 +120,29 @@ defineModule module, ->
       # not efficient
       # only to be used in dev / small dbs
       reindexAll: (request) ->
-        request.subrequest @getSourcePipelineName(), "getAll"
-        .then (items) =>
-          Promise.all(for data in items
-            request.subrequest request.pipeline, "reindex", {data}
-          ).then ->
-            reindexed: items.length
+        {pageLimit} = request.props
+
+        @reindexPage request, null, pageLimit
+
+    reindexPage: (request, lastEvaluatedKey, limit) ->
+      stats = request.context.reindex ||=
+        itemCount: 0
+        pageCount: 0
+
+      request.subrequest @getSourcePipelineName(), "getAll",
+        returnResponse: true
+        props: {lastEvaluatedKey, limit}
+
+      .then ({props: {lastEvaluatedKey, data: items}}) =>
+        Promise.all(for data in items
+          request.subrequest request.pipeline, "reindex", {data}
+        ).then =>
+          stats.itemCount += items.length
+          stats.pageCount++
+          log reindex: merge stats, {lastEvaluatedKey}
+          if lastEvaluatedKey
+            @reindexPage request, lastEvaluatedKey, limit
+      .then -> stats
 
     @filter
       after: get: (response) ->
