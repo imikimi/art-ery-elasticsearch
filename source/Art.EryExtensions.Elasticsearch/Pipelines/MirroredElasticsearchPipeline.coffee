@@ -101,7 +101,7 @@ defineModule module, ->
         update: "#{@getSourcePipelineName()}": (response) -> @_getElasticsearchUpdateProps response
 
       @deleteAfter
-        delete: "#{@getSourcePipelineName()}": ({responseData, key}) -> key: key, data: responseData
+        delete: "#{@getSourcePipelineName()}": ({responseData, key}) -> {key, data: responseData} if responseData
 
       out
 
