@@ -143,18 +143,21 @@ defineModule module, class ElasticsearchPipeline extends require './Elasticsearc
         @normalizeJsonRestClientResponse request,
           @restClient.deleteJson url
       .then (deleteResult) ->
-        # deleteResult looks like:
-        #   found: true
-        #   _index: "imikimi_oz_test"
-        #   _type: "topic_search"
-        #   _id: "wCe2JvAH5L0g"
-        #   _version: 2
-        #   result: "deleted"
-        #   _shards:
-        #     total: 2
-        #     successful: 1
-        #     failed: 0
-        request.success props: deleteResult
+        if deleteResult?.status == missing
+          request.missing()
+        else
+          # deleteResult looks like:
+          #   found: true
+          #   _index: "imikimi_oz_test"
+          #   _type: "topic_search"
+          #   _id: "wCe2JvAH5L0g"
+          #   _version: 2
+          #   result: "deleted"
+          #   _shards:
+          #     total: 2
+          #     successful: 1
+          #     failed: 0
+          request.success props: deleteResult
 
     ###
     perform a search
