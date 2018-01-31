@@ -75,16 +75,17 @@ defineModule module, class ElasticsearchPipeline extends require './Elasticsearc
 
   getEntryUrlParams:    (data) ->
     params = compactFlatten [
-      if routingField = @getRoutingField()
-        unless present routingValue = data[routingField]
-          throw new Error "routing field '#{routingField}' is not present in data: #{formattedInspect data}"
-        "routing=#{encodeURIComponent routingValue}"
+      if data? && routingField = @getRoutingField()
+        if present routingValue = data[routingField]
+          "routing=#{encodeURIComponent routingValue}"
+        # else
+        #   throw new Error "routing field '#{routingField}' is not present in data: #{formattedInspect data}"
 
-      if parentField = @getParentField()
-        unless present parentValue = data[parentField]
-          throw new Error "parent field '#{parentField}' is not present in data: #{formattedInspect data}"
-
-        "parent=#{encodeURIComponent parentValue}"
+      if data? && parentField = @getParentField()
+        if present parentValue = data[parentField]
+          "parent=#{encodeURIComponent parentValue}"
+        # else
+        #   throw new Error "parent field '#{parentField}' is not present in data: #{formattedInspect data}"
     ]
 
     "?#{params.join "&"}"
@@ -95,6 +96,12 @@ defineModule module, class ElasticsearchPipeline extends require './Elasticsearc
     .then => @getEntryUrl key, data
 
   @handlers
+    findDuplicateIds: (request) ->
+      request.subrequest request.pipelineName, "elasticsearch",
+        data:
+          size:   request.props.limit ? 100
+          query:  term: _id: request.key
+      .then (result) -> result.hits.hits
 
     get: (request) ->
       {key, data} = request
@@ -104,9 +111,10 @@ defineModule module, class ElasticsearchPipeline extends require './Elasticsearc
           @restClient.getJson url
           # @elasticsearchClient.get id: key, data: data
       .then (got) =>
-        request.success
-          data: got._source
-          elasticsearch: objectWithout got, "_source"
+        if got._source?
+          request.success
+            data: got._source
+            elasticsearch: objectWithout got, "_source"
 
     # Adds or replaces a 'document' in the index
     # this is not "create" since it doesn't generate a key - the key must be provided

@@ -1,4 +1,4 @@
-{present, merge, isArray, object, defineModule, array, log, isString, formattedInspect, Promise} = require 'art-standard-lib'
+{eq, present, merge, isArray, object, defineModule, array, log, isString, formattedInspect, Promise} = require 'art-standard-lib'
 {pipelines, UpdateAfterMixin, KeyFieldsMixin} = require 'art-ery'
 ElasticsearchPipeline = require "./ElasticsearchPipeline"
 
@@ -106,6 +106,68 @@ defineModule module, ->
       out
 
     @handler
+      # FIX one record's duplicate copies in elasticsearch
+      # NO-TESTS, but it does work, at least as-of-now (2018-1-28) - it's hard to reliably reproduce duplicate records across shards.
+      # USE? For when you have two or more records in different shards with the same ID
+      # IN:
+      #   key:    record-id
+      #   props:  pretend: true - if you want to do a dry run
+      # EFFECT: check to see if there is more than one copy of the same record on different elasticsearch shards
+      #   If so, determine which one is correct and delete the others.
+      fixDuplicateIds: (request)->
+        id = request.key
+        {pretend} = request.props
+        Promise.all([
+          request.subrequest request.pipelineName, "findDuplicateIds", id
+          request.subrequest @sourcePipeline.name, "get", key: id, props: include: false
+        ]).then ([elasticsearchResults, sourceRecord]) =>
+          correctParams = @getEntryUrlParams sourceRecord
+          foundCorrectElasticsearchRecord = null
+          incorrectParams = []
+          incorrectElasticsearchRecords = []
+          for {_source} in elasticsearchResults
+            if eq correctParams, params = @getEntryUrlParams _source
+              throw new Error "found TWO correct records, WTF" if foundCorrectElasticsearchRecord
+              foundCorrectElasticsearchRecord = _source
+            else
+              incorrectParams.push params
+              incorrectElasticsearchRecords.push _source
+
+          Promise.all([
+            for source in incorrectElasticsearchRecords
+              if pretend
+                id
+              else
+                request.subrequest request.pipelineName, "delete",
+                  key: id
+                  data: source
+          ]).then ->
+            {
+              "#{if pretend then 'pretend-' else ''}deleted": incorrectElasticsearchRecords.length
+              key: id
+              correctParams
+              incorrectParams
+            }
+
+      # out: keys reindexed
+      reindexFromElasticsearch: (request) ->
+        {pretend} = request.props
+
+        # we don't need any stored_fields to do this - just the _id
+        query = merge request.data, stored_fields: []
+
+        request.subrequest request.pipelineName, "elasticsearch", data: query, props: include: false
+        .then (results) =>
+          log reindexFromElasticsearch: {reindexing: !pretend, found: results.hits.hits.length}
+          Promise.all(for hit in results.hits.hits
+            do (hit) ->
+              if pretend
+                hit._id
+              else
+                request.subrequest request.pipelineName, "reindex", hit._id
+                .then -> hit._id
+          )
+
       reindex: (request) ->
         if request.data
           @_getElasticsearchUpdateProps request, request.data
@@ -113,9 +175,13 @@ defineModule module, ->
             request.subrequest request.pipeline, "addOrReplace", updateProps
         else
           request.require request.key
-          .then => request.subrequest @getSourcePipelineName(), "get", key: request.key, returnResponseObject: true
+          .then => request.subrequest @getSourcePipelineName(), "get",
+            key: request.key
+            returnResponseObject: true
+            props: include: false
           .then (response)    => @_getElasticsearchUpdateProps response
-          .then (updateProps) => request.subrequest request.pipeline, "addOrReplace", updateProps
+          .then (updateProps) =>
+            request.subrequest request.pipeline, "addOrReplace", updateProps
 
       # not efficient
       # only to be used in dev / small dbs
@@ -152,7 +218,7 @@ defineModule module, ->
 
     @filter
       after: get: (response) ->
-        response.withData @getApplicationData response.responseData
+        response.withData response.pipeline.getApplicationData response.responseData
 
     ###############
     # PRIVATE
